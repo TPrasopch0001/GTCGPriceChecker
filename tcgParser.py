@@ -110,6 +110,11 @@ class GTCGParser:
         self.data = pd.DataFrame(allData)
         return self.data
 
+    def getProductFromDF(self, name : str, prodID : int = -1):
+        filteredDF = self.data[[name in x.lower() for x in self.data['Name']]]
+        if prodID > 0:
+            return filteredDF[filteredDF['ProductId'] == prodID]
+        return filteredDF
 
 testParser = GTCGParser()
 testDF = testParser.readData('test.txt')
