@@ -124,5 +124,5 @@ class GTCGParser:
     
 
 testParser = GTCGParser()
-testParser.readData('test.txt', save = True)
+testParser.readData('cardInfo.txt', save = True)
 print(testParser.getProductFromName('geara zulu'))
