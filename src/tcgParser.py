@@ -2,10 +2,7 @@ import json
 import requests
 import datetime
 import os
-import ast
 import pandas as pd
-
-
 
 class GTCGParser:
     
@@ -47,7 +44,7 @@ class GTCGParser:
     def getProductPrice(price : dict) -> dict | None:
         wantedInfo = {}
         wantedInfo['ProductId'] = price['productId']
-        wantedInfo['Market Price'] = price['marketPrice']
+        wantedInfo['Lowest Price'] = price['lowPrice']
         return wantedInfo
 
         """
@@ -76,7 +73,7 @@ class GTCGParser:
                 for price in prices:
                     data = GTCGParser.getProductPrice(price)
                     allPrices.append(data)
-                
+
                 prodDF = pd.DataFrame(allProducts)
                 priceDF = pd.DataFrame(allPrices)
                 allData = pd.merge(prodDF, priceDF, on = "ProductId", how = "left")
@@ -84,7 +81,9 @@ class GTCGParser:
         return allData
 
     def save(self, filepath):
-        with open(filepath, "w") as f:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_path = os.path.join(script_dir, 'data\\' + filepath)
+        with open(output_path, "w") as f:
             f.write(str(datetime.datetime.now(tz = datetime.UTC)) + '\n')
             f.write(self.data.to_json(orient = 'records', lines = True).replace("\\/", '/'))
 
@@ -94,7 +93,8 @@ class GTCGParser:
         """
     def readData(self, filepath, save = False):
         allData = []
-        output_path = filepath
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_path = os.path.join(script_dir, 'data\\' + filepath)
         try:
             with open(output_path, 'r') as f:
                 time = datetime.datetime.fromisoformat(f.readline()[:-1])
@@ -113,15 +113,16 @@ class GTCGParser:
         return self.data
 
     def getProductFromName(self, name : str):
+        name = name.lower()
         filteredDF = self.data[[name in x.lower() for x in self.data['Name']]]
         return filteredDF
     
     def getProductFromNumber(self, number : str):
+        number = number.lower()
         filteredDF = self.data[[number in x.lower() for x in self.data['Number']]]
         return filteredDF
-
-
+    
 
 testParser = GTCGParser()
-testParser.readData('test.txt')
-print(testParser.getProductFromDF('geara zulu'))
+testParser.readData('test.txt', save = True)
+print(testParser.getProductFromName('geara zulu'))
