@@ -12,11 +12,6 @@ class GTCGParser:
     def __init__(self, initData : pd.DataFrame = pd.DataFrame()):
         self.data = initData
 
-
-    def setSaveFile(fileName) -> str:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        return os.path.join(script_dir, fileName)
-
     def getLastUpdated() -> datetime.datetime:
         r = requests.get("https://tcgcsv.com/last-updated.txt")
         update_datetime = datetime.datetime.fromisoformat(r.text)
@@ -33,6 +28,11 @@ class GTCGParser:
             return None
         for data in productExt:
             name = data['name']
+            if name == 'Rarity':
+                if '+' in data['value']:
+                    return None
+                else:
+                    wantedInfo['Rarity'] = data['value']
             if name == 'Cost' or name == 'CardType' \
             or name == 'Level' or name == 'Number' \
             or name == 'Attack Points' or name == 'Hit Points':
@@ -41,6 +41,7 @@ class GTCGParser:
                 wantedInfo['Attack Points'] = -1
             if 'Hit Points' not in wantedInfo:
                 wantedInfo['Hit Points'] = -1
+        wantedInfo['url'] = product['url']
         return wantedInfo
 
     def getProductPrice(price : dict) -> dict | None:
@@ -60,40 +61,40 @@ class GTCGParser:
         allProducts = []
         allPrices = []
         for group in all_groups:
-            group_id = group['groupId']
-            r = requests.get(f"https://tcgcsv.com/tcgplayer/86/{group_id}/products")
-            products = r.json()['results']
-            r = requests.get(f"https://tcgcsv.com/tcgplayer/86/{group_id}/prices")
-            prices = r.json()['results']
-            
-            for product in products:
-                data = GTCGParser.getProductInfo(product) 
-                if data: # If product is not a booster, box, case, etc. add it to the list
-                    allProducts.append(data)
+            if group['name'] != 'Edition Beta':
+                group_id = group['groupId']
+                r = requests.get(f"https://tcgcsv.com/tcgplayer/86/{group_id}/products")
+                products = r.json()['results']
+                r = requests.get(f"https://tcgcsv.com/tcgplayer/86/{group_id}/prices")
+                prices = r.json()['results']
+                
+                for product in products:
+                    data = GTCGParser.getProductInfo(product) 
+                    if data: # If product is not a booster, box, case, etc. add it to the list
+                        allProducts.append(data)
 
-            for price in prices:
-                data = GTCGParser.getProductPrice(price)
-                allPrices.append(data)
-            
-            prodDF = pd.DataFrame(allProducts)
-            priceDF = pd.DataFrame(allPrices)
-            allData = pd.merge(prodDF, priceDF, on = "ProductId", how = "left")
+                for price in prices:
+                    data = GTCGParser.getProductPrice(price)
+                    allPrices.append(data)
+                
+                prodDF = pd.DataFrame(allProducts)
+                priceDF = pd.DataFrame(allPrices)
+                allData = pd.merge(prodDF, priceDF, on = "ProductId", how = "left")
         self.data = allData
         return allData
 
     def save(self, filepath):
-        filepath = GTCGParser.setSaveFile(filepath)
         with open(filepath, "w") as f:
             f.write(str(datetime.datetime.now(tz = datetime.UTC)) + '\n')
-            f.write(self.data.to_json(orient = 'records', lines = True))
+            f.write(self.data.to_json(orient = 'records', lines = True).replace("\\/", '/'))
 
         """
         Reads local data if the data is up to date and file exists, 
         otherwise collects data then parses it in
         """
-    def readData(self, filepath):
+    def readData(self, filepath, save = False):
         allData = []
-        output_path = GTCGParser.setSaveFile(filepath)
+        output_path = filepath
         try:
             with open(output_path, 'r') as f:
                 time = datetime.datetime.fromisoformat(f.readline()[:-1])
@@ -102,20 +103,25 @@ class GTCGParser:
                     for line in f:
                         allData.append(json.loads(line))
                 else:
-                    allData = GTCGParser.getDataOnline()
+                    allData = self.getDataOnline()
         except FileNotFoundError:
             print(f"Error: The file '{filepath}' was not found, creating new data")
-            allData = GTCGParser.getDataOnline()
-            self.save(allData, filepath)
+            allData = self.getDataOnline()
+            if save:
+                self.save(filepath)
         self.data = pd.DataFrame(allData)
         return self.data
 
-    def getProductFromDF(self, name : str, prodID : int = -1):
+    def getProductFromName(self, name : str):
         filteredDF = self.data[[name in x.lower() for x in self.data['Name']]]
-        if prodID > 0:
-            return filteredDF[filteredDF['ProductId'] == prodID]
+        return filteredDF
+    
+    def getProductFromNumber(self, number : str):
+        filteredDF = self.data[[number in x.lower() for x in self.data['Number']]]
         return filteredDF
 
+
+
 testParser = GTCGParser()
-testDF = testParser.readData('test.txt')
-testParser.save('test.txt')
+testParser.readData('test.txt')
+print(testParser.getProductFromDF('geara zulu'))
